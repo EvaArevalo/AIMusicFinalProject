@@ -9,6 +9,16 @@ class NoteTypes(Enum):
 	sixteenth = 16
 	thirtysecond = 32
 
+class NoteLetters(Enum):
+    '''Class representing a musical note'''
+    C = 0
+    D = 2
+    E = 4
+    F = 6
+    G = 8
+    A = 10
+    B = 12
+
 class Note:
     '''Class representing a musical note'''
     notetype = None
@@ -21,22 +31,75 @@ class Note:
     def __init__(self,notetype,step,octave,tie,accidental):
         self.notetype = notetype
         self.step = step
-        self.octave = octave
+        self.octave = int(octave)
         self.tie = tie
-        if accidental:
-            self.so = step + accidental+ str(octave)
-        else:
-            self.so = step + str(octave)
         self.accidental = accidental
+        
+    def get_so(self):
+        if self.accidental:
+            so = self.step + self.accidental + str(self.octave)
+        else:
+            so = self.step + str(self.octave)
+        return so
     
     def printNote(self):
         if self.step=='':
             print('Note: ' + 'rest' + ' / ' +
               str(self.notetype))
         else:
-            print('Note: ' + str(self.so) + ' / ' +
+            print('Note: ' + str(self.get_so()) + ' / ' +
               str(self.notetype) + ' / ' +
               str(self.tie))
+            
+    def addOctaves(self,addOct):
+        self.octave += addOct
+        
+    def copyNote(self):
+        ncopy = Note(self.notetype,self.step,self.octave,self.tie,self.accidental)
+        return ncopy
+    
+    def addSemiTone(self,semiTToAdd):
+        
+        #get relative position of new note
+        newVal = getattr(NoteLetters,self.step).value + semiTToAdd
+        
+        #handle semitones first
+        if (semiTToAdd%2!=0):
+            
+            if self.accidental == '#':
+                self.accidental = None
+                newVal += 1
+
+            elif self.accidental == 'b':
+                self.accidental = None
+                newVal -= 1
+            
+            elif not self.accidental:
+                self.accidental = '#'
+                newVal -= 1
+                
+            #natural, assumes sharps in score
+            else:
+                self.accidental = None
+
+        
+
+       
+        #Change step within same octave
+        if newVal>=0 and newVal<14:
+            self.step=NoteLetters(newVal).name
+        
+        #change step to a lower octave
+        elif newVal<0:
+            self.step = NoteLetters(newVal%14).name
+            self.octave -= 1
+        
+        #change step to a higher octave
+        elif newVal>=14:
+            self.step = NoteLetters(newVal%14).name
+            self.octave += 1     
+    
+
 
 class Measure:
     '''Class representing a measure'''
