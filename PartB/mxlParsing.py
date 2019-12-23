@@ -1,4 +1,6 @@
 from enum import Enum
+import math
+
 
 class NoteTypes(Enum):
 	'''Class defining types of notes'''
@@ -39,6 +41,7 @@ class Note:
         if self.accidental:
             so = self.step + self.accidental + str(self.octave)
         else:
+            
             so = self.step + str(self.octave)
         return so
     
@@ -58,10 +61,12 @@ class Note:
         ncopy = Note(self.notetype,self.step,self.octave,self.tie,self.accidental)
         return ncopy
     
-    def addSemiTone(self,semiTToAdd):
+    def addSemiTones(self,semiTToAdd):
         
         #get relative position of new note
         newVal = getattr(NoteLetters,self.step).value + semiTToAdd
+        #DEBUG
+        #print(newVal)
         
         #handle semitones first
         if (semiTToAdd%2!=0):
@@ -82,23 +87,12 @@ class Note:
             else:
                 self.accidental = None
 
-        
-
        
-        #Change step within same octave
-        if newVal>=0 and newVal<14:
-            self.step=NoteLetters(newVal).name
+        #Change step
+        self.step = NoteLetters(newVal% 14).name
         
-        #change step to a lower octave
-        elif newVal<0:
-            self.step = NoteLetters(newVal%14).name
-            self.octave -= 1
-        
-        #change step to a higher octave
-        elif newVal>=14:
-            self.step = NoteLetters(newVal%14).name
-            self.octave += 1     
-    
+        #change octave
+        self.octave += math.floor(newVal/14)   
 
 
 class Measure:
@@ -111,7 +105,7 @@ class Measure:
     def get_sos(self):
         sos = []
         for note in self.notes:
-            sos.append(note.so)
+            sos.append(note.get_so())
         return sos
     
     def get_notetypes(self):
@@ -129,7 +123,9 @@ class Measure:
     def printMeasure(self):
         for note in self.notes:
             note.printNote()
-
+            
+    def get_notes(self):
+        return notes
 
 def get_ts_xml(root):
     '''Gets time signature for a musicxml file.
@@ -196,3 +192,55 @@ def get_meas_notes_xml(xml_measure_notes):
         #DEBUG
         #note.printNote()
     return notes
+
+def compare_notes(n1,n2):
+    '''returns the difference in semitones between 2 notes'''
+    val1 = getattr(NoteLetters,n1.step).value
+    val2 = getattr(NoteLetters,n2.step).value
+    difference = val2 - val1
+    #add octaves
+    difference += (n2.octave - n1.octave) * 14
+    #add accidentals
+    if (n1.accidental):
+        if n1.accidental == '#':
+            difference-=1
+        elif n1.accidental == 'b':
+            difference+=1
+        #naturals,assumes the sheet music has flat alterations only
+        else:
+            difference+=1
+    if (n2.accidental):
+        if n1.accidental == '#':
+            difference+=1
+        elif n1.accidental == 'b':
+            difference-=1
+        #naturals,assumes the sheet music has flat alterations only
+        else:
+            difference-=1
+    return difference
+
+def get_inverted_measure(measure):
+    
+    #get first note
+    inv_notes = []
+    prevNoteNew = measure.notes[0].copyNote()
+    prevNoteNew.addSemiTones(-14)
+    #DEBUG
+    #prevNoteNew.printNote()
+    inv_notes.append(prevNoteNew)
+    prevNoteOg = measure.notes[0].copyNote()
+    
+    for nextNoteOg in measure.notes[1:]:
+        nextNoteNew = Note(nextNoteOg.notetype,prevNoteNew.step,prevNoteNew.octave,nextNoteOg.tie,nextNoteOg.accidental)
+        diff = compare_notes(prevNoteOg,nextNoteOg)
+        nextNoteNew.addSemiTones(-diff)
+        inv_notes.append(nextNoteNew)
+        prevNoteOg = nextNoteOg
+        prevNoteNew = nextNoteNew
+        #DEBUG 
+        #print(diff)
+        #prevNoteNew.printNote()
+
+    inv_meas = Measure(inv_notes)
+    return inv_meas
+    
