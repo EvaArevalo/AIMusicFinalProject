@@ -86,6 +86,7 @@ class Note:
             #natural, assumes sharps in score
             else:
                 self.accidental = None
+                newVal -= 1
 
        
         #Change step
@@ -167,7 +168,7 @@ def decode_xml_note(xml_note):
     try:
         accidental = xml_note.find('.//accidental').text
         if accidental == 'natural':
-            accidental = '*'
+            accidental = 'n'
         if accidental == 'flat':
             accidental = 'b'
         if accidental == 'sharp':
@@ -224,23 +225,34 @@ def get_inverted_measure(measure):
     #get first note
     inv_notes = []
     prevNoteNew = measure.notes[0].copyNote()
-    prevNoteNew.addSemiTones(-14)
+    if prevNoteNew.step!= '':
+        prevNoteNew.addSemiTones(-14)
     #DEBUG
     #prevNoteNew.printNote()
     inv_notes.append(prevNoteNew)
     prevNoteOg = measure.notes[0].copyNote()
     
     for nextNoteOg in measure.notes[1:]:
-        nextNoteNew = Note(nextNoteOg.notetype,prevNoteNew.step,prevNoteNew.octave,nextNoteOg.tie,nextNoteOg.accidental)
-        diff = compare_notes(prevNoteOg,nextNoteOg)
-        nextNoteNew.addSemiTones(-diff)
+        #handle rests
+        if nextNoteOg.step == '':
+            nextNoteNew = nextNoteOg.copyNote()
+        else:
+             #if previous measure is a rest
+            if prevNoteOg.step!='':
+                nextNoteNew = Note(nextNoteOg.notetype,prevNoteNew.step,prevNoteNew.octave,nextNoteOg.tie,nextNoteOg.accidental)
+                diff = compare_notes(prevNoteOg,nextNoteOg)
+            else:
+                nextNoteNew = nextNoteOg.copyNote()
+                diff = 14
+            nextNoteNew.addSemiTones(-diff)
         inv_notes.append(nextNoteNew)
         prevNoteOg = nextNoteOg
         prevNoteNew = nextNoteNew
-        #DEBUG 
-        #print(diff)
-        #prevNoteNew.printNote()
+            #DEBUG 
+            #print(diff)
+            #prevNoteNew.printNote()
 
     inv_meas = Measure(inv_notes)
     return inv_meas
+    
     
