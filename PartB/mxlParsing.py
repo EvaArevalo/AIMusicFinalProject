@@ -1,6 +1,8 @@
 from enum import Enum
 import math
+import music21 as m21
 
+####CLASSES#####
 
 class NoteTypes(Enum):
 	'''Class defining types of notes'''
@@ -21,6 +23,8 @@ class NoteLetters(Enum):
     A = 10
     B = 12
 
+import math
+
 class Note:
     '''Class representing a musical note'''
     notetype = None
@@ -29,13 +33,15 @@ class Note:
     so = None
     tie = None
     accidental = None
+    dot = False
     
-    def __init__(self,notetype,step,octave,tie,accidental):
+    def __init__(self,notetype,step,octave,tie,accidental,dot):
         self.notetype = notetype
         self.step = step
         self.octave = int(octave)
         self.tie = tie
         self.accidental = accidental
+        self.dot = dot
         
     def get_so(self):
         if self.accidental:
@@ -52,13 +58,13 @@ class Note:
         else:
             print('Note: ' + str(self.get_so()) + ' / ' +
               str(self.notetype) + ' / ' +
-              str(self.tie))
+              str(self.tie)) 
             
     def addOctaves(self,addOct):
         self.octave += addOct
         
     def copyNote(self):
-        ncopy = Note(self.notetype,self.step,self.octave,self.tie,self.accidental)
+        ncopy = Note(self.notetype,self.step,self.octave,self.tie,self.accidental,self.dot)
         return ncopy
     
     def addSemiTones(self,semiTToAdd):
@@ -95,7 +101,6 @@ class Note:
         #change octave
         self.octave += math.floor(newVal/14)   
 
-
 class Measure:
     '''Class representing a measure'''
     notes = []
@@ -127,6 +132,8 @@ class Measure:
             
     def get_notes(self):
         return notes
+
+####XML DECODING####
 
 def get_ts_xml(root):
     '''Gets time signature for a musicxml file.
@@ -165,6 +172,10 @@ def decode_xml_note(xml_note):
         tie = xml_note.find('.//tie').get('type')
     except:
         tie = None
+    if xml_note.find('.//dot') != None:
+        dot = True
+    else:
+        dot = False
     try:
         accidental = xml_note.find('.//accidental').text
         if accidental == 'natural':
@@ -177,7 +188,7 @@ def decode_xml_note(xml_note):
     except:
         accidental = None
         
-    note = Note(notetype,step,octave,tie,accidental)
+    note = Note(notetype,step,octave,tie,accidental,dot)
     #DEBUG
     #note.printNote()
     
@@ -193,6 +204,8 @@ def get_meas_notes_xml(xml_measure_notes):
         #DEBUG
         #note.printNote()
     return notes
+
+###MANIPULATION FUNCTIONS####
 
 def compare_notes(n1,n2):
     '''returns the difference in semitones between 2 notes'''
@@ -239,7 +252,7 @@ def get_inverted_measure(measure):
         else:
              #if previous measure is a rest
             if prevNoteOg.step!='':
-                nextNoteNew = Note(nextNoteOg.notetype,prevNoteNew.step,prevNoteNew.octave,nextNoteOg.tie,nextNoteOg.accidental)
+                nextNoteNew = Note(nextNoteOg.notetype,prevNoteNew.step,prevNoteNew.octave,nextNoteOg.tie,nextNoteOg.accidental,nextNoteOg.dot)
                 diff = compare_notes(prevNoteOg,nextNoteOg)
             else:
                 nextNoteNew = nextNoteOg.copyNote()
@@ -255,4 +268,70 @@ def get_inverted_measure(measure):
     inv_meas = Measure(inv_notes)
     return inv_meas
     
+
+####MUSIC21#####
     
+def measures_to_m21Part(measures):
+    '''Builds a Score in m21 format from array of Measure types'''
+    
+    score = None
+    score = m21.stream.Part()
+
+    for measure in measures:
+        measure_notes = measure.notes
+        s1 = m21.stream.Measure()
+        
+        #add ts to first measure
+        #if not score:
+            #s1.timeSignature = ts
+        
+        for n in measure_notes:
+            #handle rests
+            if n.step == '':
+                s1.append(m21.note.Rest(type=n.notetype))
+            #notes
+            else:
+                m21Note = m21.note.Note(n.get_so(),type=n.notetype, dots=n.dot)
+                if n.tie:
+                    m21Note.tie = m21.tie.Tie(n.tie)
+                
+                s1.append(m21Note)
+        score.append(s1)
+        
+    return score
+
+def build_m21Score_1p(part1,title,ts):
+    '''builds a m21 score from 1 part'''
+    clef1 = m21.clef.TrebleClef()
+    clef1.offset = 0.0
+    part1.offset = 0.0
+    part1.id = 'mainPart'
+    score = m21.stream.Score([clef1, part1])
+    score.insert(0, m21.metadata.Metadata())
+    score.metadata.title = title
+    score.timeSignature = ts
+    #s2.duration.quarterLength
+
+    return score
+
+def build_m21Score_2p(part1,part2,title,ts):
+    '''builds a m21 score from 2 parts'''
+    clef1 = m21.clef.TrebleClef()
+    clef1.offset = 0.0
+    part1.offset = 0.0
+    part1.id = 'mainPart'
+
+    clef2 = m21.clef.BassClef()
+    clef2.offset = 0.0
+    part2.offset = 0.0
+    part2.id = 'accPart'
+
+    score = m21.stream.Score([clef1, part1, clef2, part2])
+    score = m21.stream.Score([clef1, part1])
+    score.insert(0, m21.metadata.Metadata())
+    score.metadata.title = title
+    score.timeSignature = ts
+    
+    #s2.duration.quarterLength
+
+    return score
