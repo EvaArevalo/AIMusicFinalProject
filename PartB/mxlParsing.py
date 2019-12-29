@@ -1,6 +1,8 @@
 from enum import Enum
 import math
 import music21 as m21
+import random
+import xml.etree.cElementTree as ET
 
 ####CLASSES#####
 
@@ -23,7 +25,29 @@ class NoteLetters(Enum):
     A = 10
     B = 12
 
-import math
+class Score:
+    '''An array of measures'''
+    measures = []
+    length = 0
+    ts = None
+    
+    def __init__(self,measures,ts=None):
+        self.measures = measures
+        self.length = len(measures)
+        self.ts = ts
+    
+    def copyScore(self):
+        newMeasures = []
+        for measure in self.measures:
+            m = measure.copyMeasure()
+            newMeasures.append(m)  
+        newScore = Score(newMeasures)
+        
+        return newScore
+
+    def printScore(self):
+        for m in self.measures:
+            m.printMeasure()
 
 class Note:
     '''Class representing a musical note'''
@@ -43,7 +67,7 @@ class Note:
         self.accidental = accidental
         self.dot = dot
         
-    def get_so(self):
+    def getSo(self):
         if self.accidental:
             so = self.step + self.accidental + str(self.octave)
         else:
@@ -56,7 +80,7 @@ class Note:
             print('Note: ' + 'rest' + ' / ' +
               str(self.notetype))
         else:
-            print('Note: ' + str(self.get_so()) + ' / ' +
+            print('Note: ' + str(self.getSo()) + ' / ' +
               str(self.notetype) + ' / ' +
               str(self.tie)) 
             
@@ -108,19 +132,19 @@ class Measure:
     def __init__(self,notes):
         self.notes = notes
     
-    def get_sos(self):
+    def getSos(self):
         sos = []
         for note in self.notes:
-            sos.append(note.get_so())
+            sos.append(note.getSo())
         return sos
     
-    def get_notetypes(self):
+    def getNotetypes(self):
         notetypes = []
         for note in self.notes:
             notetypes.append(note.notetype)
         return notetypes 
     
-    def get_ties(self):
+    def getTies(self):
         ties = []
         for tie in self.notes:
             ties.append(note.tie)
@@ -130,8 +154,12 @@ class Measure:
         for note in self.notes:
             note.printNote()
             
-    def get_notes(self):
+    def getNotes(self):
         return notes
+
+    def copyMeasure(self):
+        mcopy = Measure(self.notes)
+        return mcopy
 
 ####XML DECODING####
 
@@ -205,6 +233,23 @@ def get_meas_notes_xml(xml_measure_notes):
         #note.printNote()
     return notes
 
+def xmlToScore(filename):
+    tree = ET.parse(filename)
+    root = tree.getroot()
+    xml_measures = root.findall('.//measure')
+    measures = []
+
+    for xml_measure in xml_measures:
+        measure = Measure(get_meas_notes_xml(xml_measure))
+        if not measure.getSos()==['0']:
+            measures.append(measure)
+
+    top,bottom = get_ts_xml(root)
+    ts = m21.meter.TimeSignature(str(top)+'/'+str(bottom))
+            
+    return Score(measures,ts)
+    
+
 ###MANIPULATION FUNCTIONS####
 
 def compare_notes(n1,n2):
@@ -233,8 +278,31 @@ def compare_notes(n1,n2):
             difference-=1
     return difference
 
+def compare_measures(m1,m2):
+    '''compares measure m1 and m2, returns the average of the differences in semitones between their notes'''
+    measure_diff = 0
+    rests = 0
+    m1_notes = m1.notes
+    m2_notes = m2.notes
+    min_len = min(len(m1_notes),len(m2_notes))
+    for index in range(0, min_len):
+        if m1_notes[index]=='0' or m2_notes[index]=='0':
+            rests += 1
+        note_diff = compare_notes(m1_notes[index],m2_notes[index])
+        measure_diff+=note_diff
+    measure_diff /= (min_len-rests)
+    measure_diff = round(measure_diff,2)
+    return measure_diff   
+
+def checkeq_measures(m1,m2):
+    '''Returns True if t2o measures are equal, False otherwise'''
+    if m1.getSos()==m2.getSos():
+        return True
+    else:
+        return False
+
 def get_inverted_measure(measure):
-    
+    '''returns inversion of the measure'''
     #get first note
     inv_notes = []
     prevNoteNew = measure.notes[0].copyNote()
@@ -291,7 +359,7 @@ def measures_to_m21Part(measures):
                 s1.append(m21.note.Rest(type=n.notetype))
             #notes
             else:
-                m21Note = m21.note.Note(n.get_so(),type=n.notetype, dots=n.dot)
+                m21Note = m21.note.Note(n.getSo(),type=n.notetype, dots=n.dot)
                 if n.tie:
                     m21Note.tie = m21.tie.Tie(n.tie)
                 
