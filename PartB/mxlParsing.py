@@ -3,6 +3,10 @@ import math
 import music21 as m21
 import random
 import xml.etree.cElementTree as ET
+import zipfile
+import glob
+import shutil 
+import os
 
 ####CLASSES#####
 
@@ -163,6 +167,25 @@ class Measure:
 
 ####XML DECODING####
 
+def decompressMXL(name):
+    #decompress
+    filedir = "../../XMLs/"
+    filename = name + ".mxl"
+    extractdirname = "../../DecompressedXMLs/"
+    newdirname = extractdirname + name
+    filepath = os.path.join(filedir,filename)
+    with zipfile.ZipFile(filepath, 'r') as zf:
+        zf.extractall(os.path.join(extractdirname, name))
+
+    #rename and put into inputs
+    newname = name +'.musicxml'
+    os.rename(os.path.join(newdirname,"score.xml"),os.path.join(newdirname,newname))
+
+    copydest = '../Inputs/'
+    shutil.copyfile(os.path.join(newdirname,newname), os.path.join(copydest,newname))
+    inputpath = os.path.join(copydest,newname)
+
+
 def get_ts_xml(root):
     '''Gets time signature for a musicxml file.
     Input: Root of XML Tree
@@ -301,6 +324,7 @@ def checkeq_measures(m1,m2):
     else:
         return False
 
+
 def get_inverted_measure(measure):
     '''returns inversion of the measure'''
     #get first note
@@ -368,9 +392,12 @@ def measures_to_m21Part(measures):
         
     return score
 
-def build_m21Score_1p(part1,title,ts):
+def build_m21Score_1p(part1,title,ts,clef='treble'):
     '''builds a m21 score from 1 part'''
-    clef1 = m21.clef.TrebleClef()
+    if clef=='bass':
+        clef1 = m21.clef.BassClef()
+    else:
+        clef1 = m21.clef.TrebleClef()
     clef1.offset = 0.0
     part1.offset = 0.0
     part1.id = 'mainPart'
@@ -395,7 +422,6 @@ def build_m21Score_2p(part1,part2,title,ts):
     part2.id = 'accPart'
 
     score = m21.stream.Score([clef1, part1, clef2, part2])
-    score = m21.stream.Score([clef1, part1])
     score.insert(0, m21.metadata.Metadata())
     score.metadata.title = title
     score.timeSignature = ts

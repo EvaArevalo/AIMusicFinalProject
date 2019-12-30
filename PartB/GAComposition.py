@@ -52,9 +52,6 @@ def get_similarity_map(measures,threshold):
     return meas_sim_dict
 
 
-
-
-
 class GAComposition:
     measSimThresh = 0
     cooc_df = None
@@ -63,12 +60,13 @@ class GAComposition:
     scorePop = []
     maxPop = 0
     scoreOriginal = None
-    #nondefinable
     mutPerScoreThresh = 3
+    #nondefinable
     scorePool = []
+    candidateAmtMax = 5
     
-    def __init__(self, score = None, measSimThresh = 0.75, coocPath = 'note_coocc.pickle', 
-                 measMutProb = 0.3, recombProb = 0.1, maxPop = 100):
+    def __init__(self, score = None, measSimThresh = 0.70, coocPath = 'note_coocc.pickle', 
+                 measMutProb = 0.1, recombProb = 0.1, maxPop = 100, mutPerScoreThresh = 2):
         self.scoreOriginal = score
         self.cooc_df = pd.read_pickle(coocPath)
         self.simMap = get_similarity_map(score.measures,measSimThresh)
@@ -76,6 +74,7 @@ class GAComposition:
         self.measMutProb = measMutProb
         self.recombProb = recombProb
         self.maxPop = maxPop
+        self.mutPerScoreThresh = mutPerScoreThresh
         #functions
         self.initPopulation()
         
@@ -112,7 +111,18 @@ class GAComposition:
         score_fitness /= len(measures)
         score_fitness = round(score_fitness,2)
         return score_fitness
-            
+
+    def mutateScore(self, score):
+        #how many mutations
+        scoreMutAmt = random.randint(1,self.mutPerScoreThresh)
+        #DEBUG
+        #print("mutating scoreamt: " + str(scoreMutAmt))
+        #where
+        for mut in range(1,scoreMutAmt):
+            index = random.randint(0,score.length-1)
+            meas = score.measures[index]
+            self.mutateMeasure(index,meas)
+                        
 
     def mutateMeasure(self,index,curr_measure):
         '''mutates a measure with prob measMutProb'''
@@ -120,14 +130,15 @@ class GAComposition:
         meas_len = len(meas_sos)
         mut_prob  = random.randint(0,100)/100
         mut_succ = False
-        if mut_prob <= self.measMutProb:
+        if mut_prob <= self.measMutProb and meas_len>1:
             while not mut_succ:
                 #DEBUG
                 #print("calling mutating note...")
-                mut_index = random.randint(0,meas_len-1)
+                mut_index = random.randint(1,meas_len-1)
                 note_to_mut = curr_measure.notes[mut_index]
-                prev_note_so = note_to_mut.getSo()
-                mut_succ = self.mutateNote(note_to_mut)
+                prev_note = curr_measure.notes[mut_index-1]
+                original_note_so = note_to_mut.getSo()
+                mut_succ = self.mutateNote(note_to_mut,prev_note)
                 new_note_so = note_to_mut.getSo()
 
             #change similar notes in similar measures
@@ -135,7 +146,7 @@ class GAComposition:
             for i in simMeasInd:
                 iNotes = self.scoreOriginal.measures[i].notes
                 for iNote in iNotes:
-                    if iNote.getSo() == prev_note_so:
+                    if iNote.getSo() == original_note_so:
                         if len(new_note_so)>2:
                             iNote.step = new_note_so[0]
                             iNote.octave = int(new_note_so[2])
@@ -146,34 +157,23 @@ class GAComposition:
                         #change accidentla
                         iNote.accidental = None
                         
-    def mutateNote(self, note):
+    def mutateNote(self, note, prev_note):
         '''mutates a note with probability proportional to noteoccurence'''
         #DEBUG
         #print('getting new note')
-        prev_note = note.getSo()
+        prev_note_so = prev_note.getSo()
         if  prev_note != '0': #ignore rests
             #handle naturals
-            if len(prev_note)>2 and prev_note[1]=='n':
-                prev_note = prev_note[0]+prev_note[2]
-            #get candidates
-            candidates = self.cooc_df[prev_note]
+            if len(prev_note_so)>2 and prev_note_so[1]=='n':
+                prev_note_so = prev_note_so[0]+prev_note_so[2]
+             #get candidates
+            #print(prev_note)
+            candidates = self.cooc_df[prev_note_so]
             candidates = candidates[candidates>0]
-            candidates = candidates.cumsum()
-            maxind = candidates.iloc[-1]
+            candidates = candidates.sort_values(ascending=False)
             #get new note
-            newnote_index = random.randint(0,maxind)
-            cand_amt = len(candidates)
-            new_note_so = None
-            index = 0
-            while not new_note_so and index<cand_amt-1:
-                if candidates[index]>newnote_index:
-                    new_note_so = candidates.index[index]
-                    break
-                else:
-                    index += 1
-            #if index
-            if index >= cand_amt-1:
-                new_note_so = candidates.index[index]
+            newnote_index = random.randint(0,self.candidateAmtMax)
+            new_note_so = candidates.index[newnote_index]
             #change note
             #DEBUG
             #print('changing note')
@@ -191,15 +191,6 @@ class GAComposition:
             return False
 
         
-    def mutateScore(self, score):
-        #how many mutations
-        scoreMutAmt = random.randint(1,self.mutPerScoreThresh)
-        #where
-        for mut in range(1,scoreMutAmt):
-            index = random.randint(0,score.length-1)
-            meas = score.measures[index]
-            self.mutateMeasure(index,meas)
-            
     def initPopulation(self):
         for i in range (0, self.maxPop):
             s = self.scoreOriginal.copyScore()
